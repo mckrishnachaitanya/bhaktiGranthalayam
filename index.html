@@ -214,6 +214,21 @@ function prepChapters(raw){
   });
 }
 
+/* ------------ preprocessing (sloka/stotra collections) ------------ */
+/* Flat items, no chapter numbers, no story order — expects [{title, text}, ...]
+   or [{title, paragraphs:[...]}, ...] in the source JSON. */
+function prepCollection(raw){
+  return raw.map(c=>({
+    title: (c.title || "").trim(),
+    body: c.text ? c.text.split(/\n+/).map(s=>s.trim()).filter(Boolean)
+                  : (c.paragraphs || [])
+  }));
+}
+
+function prepBookData(raw, cfg){
+  return (cfg && cfg.type === "collection") ? prepCollection(raw) : prepChapters(raw);
+}
+
 /* ------------ boot ------------ */
 applyTheme(theme);
 fetch("books.json")
@@ -228,7 +243,7 @@ async function loadBookChapters(id){
   const cfg = booksConfig.find(b=>b.id===id);
   if(!cfg) return null;
   const raw = await fetch(cfg.chaptersFile).then(r=>r.json());
-  const prepped = prepChapters(raw);
+  const prepped = prepBookData(raw, cfg);
   bookDataCache[id] = prepped;
   return prepped;
 }
@@ -266,9 +281,10 @@ function showShelf(){
 
   let h = `<div class="shelf-intro">మీ గ్రంథాలయం · Your library</div><div class="booklist">`;
   h += booksConfig.map(b=>{
-    const done = Object.keys(LS.get(`read_${b.id}`, {})).length;
+    const isCollection = b.type === "collection";
+    const done = isCollection ? 0 : Object.keys(LS.get(`read_${b.id}`, {})).length;
     return `<button class="bookcard" onclick="location.hash='#/book/${b.id}'">
-      <span class="glyph">📖</span>
+      <span class="glyph">${isCollection ? "🪔" : "📖"}</span>
       <span class="info">
         <span class="ttl">${esc(b.title)}</span>
         <span class="sub2">${esc(b.subtitle||"")}</span>
@@ -287,6 +303,11 @@ function showHome(){
   $("#barTitle").textContent = currentBookCfg ? currentBookCfg.title : "";
   $("#barSub").textContent = currentBookCfg ? (currentBookCfg.subtitle||"") : "";
   document.title = currentBookCfg ? currentBookCfg.title : "భక్తి గ్రంథాలయం";
+
+  if(currentBookCfg && currentBookCfg.type === "collection"){
+    showCollectionHome();
+    return;
+  }
 
   let h="";
   if(lastCh!==null && chapters[lastCh]){
@@ -320,6 +341,16 @@ function showHome(){
   }
   home.innerHTML=h;
 }
+/* Collections (slokas/stotras): flat tap-to-read list, no order, no progress,
+   no continue-card, no day-grouping — none of that applies to this content type. */
+function showCollectionHome(){
+  const h = `<div class="chlist">` + chapters.map((c,i)=>`
+    <button class="ch" onclick="location.hash='#/book/${currentBookId}/ch/${i}'">
+      <span class="num">✦</span>
+      <span class="t">${esc(c.title||("అంశం "+i))}</span>
+    </button>`).join("") + `</div>`;
+  home.innerHTML = h;
+}
 function dayHeader(t){return `<div class="dayhdr"><span class="d">${t}</span><span class="rule"></span></div>`}
 function chRow(i){
   const c=chapters[i];
@@ -342,12 +373,25 @@ function showReader(i){
   $("#barTitle").textContent=shortTitle(i);
   $("#barSub").textContent=`Chapter ${i} of ${chapters.length-1}`;
   document.title=shortTitle(i);
-  lastCh=i; saveLastCh();
+
+  const isCollection = currentBookCfg && currentBookCfg.type === "collection";
 
   let h=`<article style="font-size:${fontScale}rem">`;
   h+=`<h2>${esc(c.title)}</h2>`;
   c.body.forEach(p=>{ h+=`<p>${esc(p)}</p>`; });
   h+=`</article><div class="endmark">❋ ❋ ❋</div>`;
+
+  if(isCollection){
+    /* Standalone item: no progress tracking, no sequence — just back to the list. */
+    h+=`<div class="endactions"><div class="navrow">
+      <button class="btn" onclick="location.hash='#/book/${currentBookId}'">జాబితా · List</button>
+    </div></div>`;
+    reader.innerHTML=h;
+    requestAnimationFrame(()=>window.scrollTo(0,0));
+    return;
+  }
+
+  lastCh=i; saveLastCh();
   h+=`<div class="endactions">
     <button class="btn primary" id="doneBtn">${read[i]?"పఠించారు ✔ · Read":"పఠించాను ✔ · Mark as read"}</button>
     <div class="navrow">

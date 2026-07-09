@@ -3,6 +3,7 @@
     "id": "satcharitra",
     "title": "శ్రీ సాయి సచ్చరిత్ర",
     "subtitle": "Sri Sai Satcharitra",
+    "type": "narrative",
     "chaptersFile": "chapters.json",
     "daySplit": [ [1,7], [8,15], [16,22], [23,30], [31,37], [38,44], [45,51] ]
   }
