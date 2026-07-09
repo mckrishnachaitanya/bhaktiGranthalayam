@@ -1,0 +1,45 @@
+name: Scrape Satcharitra Text
+
+# Manual trigger only — run it once from the Actions tab.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+
+      - name: Run scraper
+        run: python scrape_satcharitra.py
+
+      - name: Show summary
+        run: |
+          python - <<'EOF'
+          import json
+          chapters = json.load(open("chapters.json", encoding="utf-8"))
+          print(f"Chapters: {len(chapters)}")
+          for c in chapters[:3] + chapters[-2:]:
+              chars = sum(len(p) for p in c["paragraphs"])
+              print(f"  [{c['index']}] {c['title'][:40]}  ({len(c['paragraphs'])} paras, {chars} chars)")
+          EOF
+
+      - name: Commit chapters.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add chapters.json
+          git diff --cached --quiet && echo "No changes." || git commit -m "Add scraped Satcharitra chapters"
+          git push
