@@ -24,7 +24,7 @@ from urllib.parse import urljoin, urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-BASE = "http://www.funnotes.net/"
+BASE = "https://www.funnotes.net/"
 INDEX_URL = urljoin(BASE, "sai_satcharitra_telugu.php")
 CACHE_DIR = Path("raw_cache")
 OUT_FILE = Path("chapters.json")
