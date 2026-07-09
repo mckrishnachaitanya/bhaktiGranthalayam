@@ -150,18 +150,41 @@ let history_  = LS.get("history", []);       // ["2026-07-16", ...]
 let fontScale = LS.get("font", 1.05);
 let theme     = LS.get("theme", "light");
 
-/* Parayana day grouping: funnotes 7-day split of 51 adhyayams.
-   Index here refers to position in chapters.json (0 = upodghatam if present). */
+/* Parayana day grouping by actual chapter number (7-day split of 51 adhyayams). */
 const DAY_SPLIT = [ [1,7], [8,15], [16,22], [23,30], [31,37], [38,44], [45,51] ];
+
+/* Every chapter page repeats this banner as its first line; the real
+   heading (e.g. "మొదటి అధ్యాయము") is the line right after it. */
+const BANNER = "శ్రీ సాయి సత్ చరిత్రము";
 
 const $ = s => document.querySelector(s);
 const home = $("#home"), reader = $("#reader");
+
+/* ------------ preprocessing ------------ */
+function prepChapters(raw){
+  return raw.map(c=>{
+    const paras = c.paragraphs || [];
+    const hasBanner = paras[0] && paras[0].trim()===BANNER;
+    const titleIdx = hasBanner ? 1 : 0;
+    const title = (paras[titleIdx] || c.title || "").trim();
+    const body = paras.slice(titleIdx+1);
+    const nums = (c.link_text||"").match(/\d+/g);
+    const isChapter = /^Chapters?\b/i.test(c.link_text||"") && nums;
+    return {
+      ...c,
+      title,
+      body,
+      isChapter: !!isChapter,
+      chapNums: isChapter ? nums.map(Number) : []
+    };
+  });
+}
 
 /* ------------ boot ------------ */
 applyTheme(theme);
 fetch("chapters.json")
   .then(r=>r.json())
-  .then(d=>{ chapters=d; route(); })
+  .then(d=>{ chapters=prepChapters(d); route(); })
   .catch(()=>{ home.innerHTML="<p style='padding:30px;text-align:center'>chapters.json లోడ్ కాలేదు. ఇంటర్నెట్‌తో ఒకసారి తెరవండి.<br>Could not load chapters. Open once with internet.</p>"; });
 
 window.addEventListener("hashchange", route);
@@ -192,14 +215,18 @@ function showHome(){
 
   const covered=new Set();
   DAY_SPLIT.forEach((rg,di)=>{
+    const idxs=[...chapters.keys()].filter(i=>{
+      const c=chapters[i];
+      return c.isChapter && c.chapNums.some(n=>n>=rg[0]&&n<=rg[1]);
+    });
+    if(!idxs.length)return;
     h+=dayHeader(`దినము ${di+1} · Day ${di+1}`);
-    h+=`<div class="chlist">`;
-    for(let i=rg[0]; i<=rg[1] && i<chapters.length; i++){ h+=chRow(i); covered.add(i); }
-    h+=`</div>`;
+    h+=`<div class="chlist">`+idxs.map(chRow).join("")+`</div>`;
+    idxs.forEach(i=>covered.add(i));
   });
   const extras=[...chapters.keys()].filter(i=>!covered.has(i));
   if(extras.length){
-    h+=dayHeader("ఉపోద్ఘాతము · Introduction");
+    h+=dayHeader("పూజ మరియు హారతులు · Prayers & Aartis");
     h+=`<div class="chlist">`+extras.map(chRow).join("")+`</div>`;
   }
   home.innerHTML=h;
@@ -207,8 +234,9 @@ function showHome(){
 function dayHeader(t){return `<div class="dayhdr"><span class="d">${t}</span><span class="rule"></span></div>`}
 function chRow(i){
   const c=chapters[i];
+  const num=c.isChapter ? c.chapNums.join("–") : "✦";
   return `<button class="ch${read[i]?" read":""}" onclick="location.hash='#/ch/${i}'">
-    <span class="num">${i===0&&!/అధ్యాయ/.test(c.title)?"✦":i}</span>
+    <span class="num">${num}</span>
     <span class="t">${esc(shortTitle(i))}</span>
     <span class="tick">✔</span></button>`;
 }
@@ -229,7 +257,7 @@ function showReader(i){
 
   let h=`<article style="font-size:${fontScale}rem">`;
   h+=`<h2>${esc(c.title)}</h2>`;
-  c.paragraphs.slice(1).forEach(p=>{ h+=`<p>${esc(p)}</p>`; });
+  c.body.forEach(p=>{ h+=`<p>${esc(p)}</p>`; });
   h+=`</article><div class="endmark">❋ ❋ ❋</div>`;
   h+=`<div class="endactions">
     <button class="btn primary" id="doneBtn">${read[i]?"పఠించారు ✔ · Read":"పఠించాను ✔ · Mark as read"}</button>
