@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#A93226"/>
+  <circle cx="256" cy="256" r="180" fill="none" stroke="#E8C56A" stroke-width="10"/>
+  <text x="256" y="300" font-family="'Noto Serif Telugu',serif" font-size="150"
+        fill="#FBF3E7" text-anchor="middle" font-weight="700">సాయి</text>
+</svg>
