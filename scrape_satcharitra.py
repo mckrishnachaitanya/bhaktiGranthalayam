@@ -76,43 +76,20 @@ def telugu_ratio(text: str) -> float:
 
 
 def extract_chapter(html: str) -> dict:
-    """Pull title + Telugu paragraphs out of a chapter page.
-
-    Strategy: don't rely on the site's CSS classes. Take every block-level
-    text chunk; keep chunks that are mostly Telugu. The page's navigation,
-    menus and footer are English, so they filter out naturally.
-    """
+    """Pull title + Telugu paragraphs: flatten page text, keep Telugu lines."""
     soup = BeautifulSoup(html, "html.parser")
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
 
-    # Candidate blocks: paragraphs, divs, table cells, headings
-    blocks = []
-    for el in soup.find_all(["p", "div", "td", "h1", "h2", "h3", "h4", "li", "span", "font"]):
-        # only leaf-ish elements: skip containers whose children we'll visit anyway
-        if el.find(["p", "div", "td", "h1", "h2", "h3", "h4", "li"]):
-            continue
-        text = el.get_text(separator="\n", strip=True)
-        if not text:
-            continue
-        blocks.append(text)
-
-    # Deduplicate consecutive identical blocks (nested markup can repeat text)
-    deduped = []
-    for b in blocks:
-        if not deduped or deduped[-1] != b:
-            deduped.append(b)
-
     paragraphs = []
-    for b in deduped:
-        for line in b.split("\n"):
-            line = line.strip()
-            if len(line) < 2:
-                continue
-            if telugu_ratio(line) >= 0.3:  # mostly Telugu -> keep
+    for line in soup.get_text(separator="\n").split("\n"):
+        line = line.strip()
+        if len(line) < 2:
+            continue
+        if telugu_ratio(line) >= 0.3:
+            if not paragraphs or paragraphs[-1] != line:  # drop repeats
                 paragraphs.append(line)
 
-    # Title heuristic: first Telugu paragraph is usually the chapter heading
     title = paragraphs[0] if paragraphs else ""
     return {"title": title, "paragraphs": paragraphs}
 
