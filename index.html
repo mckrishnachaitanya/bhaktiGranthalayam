@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>శ్రీ సాయి సచ్చరిత్ర</title>
-<meta name="description" content="Sri Sai Satcharitra — Telugu parayana reader">
+<title>భక్తి గ్రంథాలయం</title>
+<meta name="description" content="Bhakti Granthalayam — Telugu devotional library">
 <meta name="theme-color" content="#FAF6ED">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -46,8 +46,21 @@ header .sub{font-size:.68rem;color:var(--ink-soft);letter-spacing:.08em;text-tra
 .iconbtn{font-size:1.15rem;padding:8px;border-radius:8px;line-height:1;color:var(--ink-soft)}
 .iconbtn:active{background:var(--line)}
 
-/* ---------- home ---------- */
+/* ---------- shelf ---------- */
 main{padding:16px 16px calc(env(safe-area-inset-bottom) + 24px);max-width:640px;margin:0 auto}
+.shelf-intro{font-size:.85rem;color:var(--ink-soft);margin-bottom:16px;line-height:1.6}
+.booklist{display:flex;flex-direction:column;gap:12px}
+.bookcard{display:flex;align-items:center;gap:14px;background:var(--card);
+  border:1px solid var(--line);border-radius:14px;padding:16px;text-align:left;width:100%}
+.bookcard .glyph{font-family:var(--disp);font-size:1.6rem;color:var(--kumkuma);
+  width:44px;height:44px;border-radius:10px;background:var(--paper);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.bookcard .info{flex:1}
+.bookcard .ttl{font-family:var(--serif);font-size:1.05rem;font-weight:500}
+.bookcard .sub2{font-size:.75rem;color:var(--ink-soft);margin-top:2px}
+.bookcard .prog{font-size:.7rem;color:var(--kumkuma);margin-top:4px}
+
+/* ---------- home (per-book chapter list) ---------- */
 .continue{display:block;width:100%;text-align:left;background:var(--kumkuma);color:#FBF3E7;
   border-radius:14px;padding:14px 16px;margin-bottom:18px}
 .continue .lbl{font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;opacity:.85}
@@ -108,13 +121,14 @@ main{padding:16px 16px calc(env(safe-area-inset-bottom) + 24px);max-width:640px;
 <header id="topbar">
   <button class="iconbtn hide" id="backBtn" aria-label="వెనుకకు / Back">←</button>
   <div style="flex:1">
-    <h1 id="barTitle">శ్రీ సాయి సచ్చరిత్ర</h1>
-    <div class="sub" id="barSub">Sri Sai Satcharitra · Parayana</div>
+    <h1 id="barTitle">భక్తి గ్రంథాలయం</h1>
+    <div class="sub" id="barSub">Bhakti Granthalayam</div>
   </div>
   <button class="iconbtn" id="settingsBtn" aria-label="Settings">Aa</button>
 </header>
 
-<main id="home"></main>
+<main id="shelf"></main>
+<main id="home" class="hide"></main>
 <main id="reader" class="hide"></main>
 
 <div id="sheet" class="hide">
@@ -128,39 +142,59 @@ main{padding:16px 16px calc(env(safe-area-inset-bottom) + 24px);max-width:640px;
     <div class="seg" id="themeSeg">
       <button data-t="light">Light</button><button data-t="sepia">Sepia</button><button data-t="dark">Dark</button>
     </div>
-    <h3>పారాయణ · Parayana</h3>
-    <button class="btn" id="resetBtn">కొత్త సప్తాహం ప్రారంభించండి · Start new saptaha</button>
+    <h3 id="parayanaHdr" class="hide">పారాయణ · Parayana</h3>
+    <button class="btn hide" id="resetBtn">కొత్త సప్తాహం ప్రారంభించండి · Start new saptaha</button>
     <div class="hist" id="histBox"></div>
+    <h3>యాప్ · App</h3>
+    <button class="btn" id="refreshBtn">🔄 తాజాగా రిఫ్రెష్ చేయండి · Force refresh</button>
     <button class="danger" id="closeSheet">మూసివేయి · Close</button>
   </div>
 </div>
 
 <script>
 "use strict";
-/* ------------ state ------------ */
+/* ------------ storage helper (book-namespaced) ------------ */
 const LS = {
   get(k,d){ try{const v=localStorage.getItem("ssc_"+k);return v===null?d:JSON.parse(v)}catch(e){return d} },
   set(k,v){ try{localStorage.setItem("ssc_"+k,JSON.stringify(v))}catch(e){} }
 };
-let chapters = [];
-let read      = LS.get("read", {});          // {index:true}
-let lastCh    = LS.get("lastCh", null);
-let scrollPos = LS.get("scroll", {});        // {index: y}
-let history_  = LS.get("history", []);       // ["2026-07-16", ...]
+
+let booksConfig = [];          // from books.json
+let bookDataCache = {};        // { bookId: prepped chapters array }
+let currentBookId = null;
+let currentBookCfg = null;
+let chapters = [];             // current book's prepped chapters
+
+/* per-book state, loaded whenever we enter a book */
+let read      = {};
+let lastCh    = null;
+let scrollPos = {};
+let history_  = [];
+
+/* display prefs are app-wide, not per-book */
 let fontScale = LS.get("font", 1.05);
 let theme     = LS.get("theme", "light");
 
-/* Parayana day grouping by actual chapter number (7-day split of 51 adhyayams). */
-const DAY_SPLIT = [ [1,7], [8,15], [16,22], [23,30], [31,37], [38,44], [45,51] ];
-
-/* Every chapter page repeats this banner as its first line; the real
-   heading (e.g. "మొదటి అధ్యాయము") is the line right after it. */
+/* Every Satcharitra chapter page repeats this banner as its first line; the
+   real heading (e.g. "మొదటి అధ్యాయము") is the line right after it. */
 const BANNER = "శ్రీ సాయి సత్ చరిత్రము";
 
 const $ = s => document.querySelector(s);
-const home = $("#home"), reader = $("#reader");
+const shelf = $("#shelf"), home = $("#home"), reader = $("#reader");
 
-/* ------------ preprocessing ------------ */
+/* ------------ per-book state load/save ------------ */
+function loadBookState(id){
+  read      = LS.get(`read_${id}`, {});
+  lastCh    = LS.get(`lastCh_${id}`, null);
+  scrollPos = LS.get(`scroll_${id}`, {});
+  history_  = LS.get(`history_${id}`, []);
+}
+function saveRead(){ LS.set(`read_${currentBookId}`, read); }
+function saveLastCh(){ LS.set(`lastCh_${currentBookId}`, lastCh); }
+function saveScroll(){ LS.set(`scroll_${currentBookId}`, scrollPos); }
+function saveHistory(){ LS.set(`history_${currentBookId}`, history_); }
+
+/* ------------ preprocessing (Satcharitra-style chapters) ------------ */
 function prepChapters(raw){
   return raw.map(c=>{
     const paras = c.paragraphs || [];
@@ -182,29 +216,81 @@ function prepChapters(raw){
 
 /* ------------ boot ------------ */
 applyTheme(theme);
-fetch("chapters.json")
+fetch("books.json")
   .then(r=>r.json())
-  .then(d=>{ chapters=prepChapters(d); route(); })
-  .catch(()=>{ home.innerHTML="<p style='padding:30px;text-align:center'>chapters.json లోడ్ కాలేదు. ఇంటర్నెట్‌తో ఒకసారి తెరవండి.<br>Could not load chapters. Open once with internet.</p>"; });
+  .then(d=>{ booksConfig=d; route(); })
+  .catch(()=>{ shelf.innerHTML="<p style='padding:30px;text-align:center'>books.json లోడ్ కాలేదు. ఇంటర్నెట్‌తో ఒకసారి తెరవండి.<br>Could not load library. Open once with internet.</p>"; });
 
 window.addEventListener("hashchange", route);
 
-function route(){
-  const m = location.hash.match(/^#\/ch\/(\d+)$/);
-  if(m && chapters[+m[1]]) showReader(+m[1]); else showHome();
+async function loadBookChapters(id){
+  if(bookDataCache[id]) return bookDataCache[id];
+  const cfg = booksConfig.find(b=>b.id===id);
+  if(!cfg) return null;
+  const raw = await fetch(cfg.chaptersFile).then(r=>r.json());
+  const prepped = prepChapters(raw);
+  bookDataCache[id] = prepped;
+  return prepped;
 }
 
-/* ------------ home ------------ */
-function showHome(){
-  reader.classList.add("hide"); home.classList.remove("hide");
+async function enterBook(id){
+  currentBookCfg = booksConfig.find(b=>b.id===id) || null;
+  if(currentBookId !== id){
+    currentBookId = id;
+    loadBookState(id);
+  }
+  chapters = await loadBookChapters(id) || [];
+}
+
+function route(){
+  const mCh = location.hash.match(/^#\/book\/([\w-]+)\/ch\/(\d+)$/);
+  const mBk = location.hash.match(/^#\/book\/([\w-]+)$/);
+  if(mCh){
+    enterBook(mCh[1]).then(()=>{
+      if(chapters[+mCh[2]]) showReader(+mCh[2]); else showHome();
+    });
+  } else if(mBk){
+    enterBook(mBk[1]).then(showHome);
+  } else {
+    showShelf();
+  }
+}
+
+/* ------------ shelf (library home) ------------ */
+function showShelf(){
+  home.classList.add("hide"); reader.classList.add("hide"); shelf.classList.remove("hide");
   $("#backBtn").classList.add("hide");
-  $("#barTitle").textContent="శ్రీ సాయి సచ్చరిత్ర";
-  $("#barSub").textContent="Sri Sai Satcharitra · Parayana";
-  document.title="శ్రీ సాయి సచ్చరిత్ర";
+  $("#barTitle").textContent="భక్తి గ్రంథాలయం";
+  $("#barSub").textContent="Bhakti Granthalayam";
+  document.title="భక్తి గ్రంథాలయం";
+
+  let h = `<div class="shelf-intro">మీ గ్రంథాలయం · Your library</div><div class="booklist">`;
+  h += booksConfig.map(b=>{
+    const done = Object.keys(LS.get(`read_${b.id}`, {})).length;
+    return `<button class="bookcard" onclick="location.hash='#/book/${b.id}'">
+      <span class="glyph">📖</span>
+      <span class="info">
+        <span class="ttl">${esc(b.title)}</span>
+        <span class="sub2">${esc(b.subtitle||"")}</span>
+        ${done ? `<span class="prog">${done} చదివారు · read</span>` : ""}
+      </span>
+    </button>`;
+  }).join("");
+  h += `</div>`;
+  shelf.innerHTML = h;
+}
+
+/* ------------ home (per-book chapter list) ------------ */
+function showHome(){
+  shelf.classList.add("hide"); reader.classList.add("hide"); home.classList.remove("hide");
+  $("#backBtn").classList.remove("hide");
+  $("#barTitle").textContent = currentBookCfg ? currentBookCfg.title : "";
+  $("#barSub").textContent = currentBookCfg ? (currentBookCfg.subtitle||"") : "";
+  document.title = currentBookCfg ? currentBookCfg.title : "భక్తి గ్రంథాలయం";
 
   let h="";
   if(lastCh!==null && chapters[lastCh]){
-    h+=`<button class="continue" onclick="location.hash='#/ch/${lastCh}'">
+    h+=`<button class="continue" onclick="location.hash='#/book/${currentBookId}/ch/${lastCh}'">
       <div class="lbl">చదవడం కొనసాగించండి · Continue reading</div>
       <div class="ttl">${esc(shortTitle(lastCh))}</div></button>`;
   }
@@ -213,20 +299,23 @@ function showHome(){
   for(let i=0;i<total;i++) h+=`<span class="bead${read[i]?" done":""}"></span>`;
   h+=`</div><div class="mala-cap"><b>${done}</b> / ${total} అధ్యాయాలు పఠించారు</div>`;
 
+  const daySplit = currentBookCfg && currentBookCfg.daySplit;
   const covered=new Set();
-  DAY_SPLIT.forEach((rg,di)=>{
-    const idxs=[...chapters.keys()].filter(i=>{
-      const c=chapters[i];
-      return c.isChapter && c.chapNums.some(n=>n>=rg[0]&&n<=rg[1]);
+  if(daySplit){
+    daySplit.forEach((rg,di)=>{
+      const idxs=[...chapters.keys()].filter(i=>{
+        const c=chapters[i];
+        return c.isChapter && c.chapNums.some(n=>n>=rg[0]&&n<=rg[1]);
+      });
+      if(!idxs.length)return;
+      h+=dayHeader(`దినము ${di+1} · Day ${di+1}`);
+      h+=`<div class="chlist">`+idxs.map(chRow).join("")+`</div>`;
+      idxs.forEach(i=>covered.add(i));
     });
-    if(!idxs.length)return;
-    h+=dayHeader(`దినము ${di+1} · Day ${di+1}`);
-    h+=`<div class="chlist">`+idxs.map(chRow).join("")+`</div>`;
-    idxs.forEach(i=>covered.add(i));
-  });
+  }
   const extras=[...chapters.keys()].filter(i=>!covered.has(i));
   if(extras.length){
-    h+=dayHeader("పూజ మరియు హారతులు · Prayers & Aartis");
+    if(daySplit) h+=dayHeader("పూజ మరియు హారతులు · Prayers & Aartis");
     h+=`<div class="chlist">`+extras.map(chRow).join("")+`</div>`;
   }
   home.innerHTML=h;
@@ -235,7 +324,7 @@ function dayHeader(t){return `<div class="dayhdr"><span class="d">${t}</span><sp
 function chRow(i){
   const c=chapters[i];
   const num=c.isChapter ? c.chapNums.join("–") : "✦";
-  return `<button class="ch${read[i]?" read":""}" onclick="location.hash='#/ch/${i}'">
+  return `<button class="ch${read[i]?" read":""}" onclick="location.hash='#/book/${currentBookId}/ch/${i}'">
     <span class="num">${num}</span>
     <span class="t">${esc(shortTitle(i))}</span>
     <span class="tick">✔</span></button>`;
@@ -247,13 +336,13 @@ function shortTitle(i){
 
 /* ------------ reader ------------ */
 function showReader(i){
-  home.classList.add("hide"); reader.classList.remove("hide");
+  shelf.classList.add("hide"); home.classList.add("hide"); reader.classList.remove("hide");
   $("#backBtn").classList.remove("hide");
   const c=chapters[i];
   $("#barTitle").textContent=shortTitle(i);
   $("#barSub").textContent=`Chapter ${i} of ${chapters.length-1}`;
   document.title=shortTitle(i);
-  lastCh=i; LS.set("lastCh",i);
+  lastCh=i; saveLastCh();
 
   let h=`<article style="font-size:${fontScale}rem">`;
   h+=`<h2>${esc(c.title)}</h2>`;
@@ -262,12 +351,12 @@ function showReader(i){
   h+=`<div class="endactions">
     <button class="btn primary" id="doneBtn">${read[i]?"పఠించారు ✔ · Read":"పఠించాను ✔ · Mark as read"}</button>
     <div class="navrow">
-      ${i>0?`<button class="btn" onclick="location.hash='#/ch/${i-1}'">‹ మునుపటి</button>`:""}
-      <button class="btn" onclick="location.hash=''">జాబితా · List</button>
-      ${i<chapters.length-1?`<button class="btn" onclick="location.hash='#/ch/${i+1}'">తరువాత ›</button>`:""}
+      ${i>0?`<button class="btn" onclick="location.hash='#/book/${currentBookId}/ch/${i-1}'">‹ మునుపటి</button>`:""}
+      <button class="btn" onclick="location.hash='#/book/${currentBookId}'">జాబితా · List</button>
+      ${i<chapters.length-1?`<button class="btn" onclick="location.hash='#/book/${currentBookId}/ch/${i+1}'">తరువాత ›</button>`:""}
     </div></div>`;
   reader.innerHTML=h;
-  $("#doneBtn").onclick=()=>{ read[i]=true; LS.set("read",read); location.hash=""; };
+  $("#doneBtn").onclick=()=>{ read[i]=true; saveRead(); location.hash=`#/book/${currentBookId}`; };
 
   requestAnimationFrame(()=>window.scrollTo(0, scrollPos[i]||0));
 }
@@ -275,10 +364,15 @@ let scrollTimer=null;
 window.addEventListener("scroll",()=>{
   if(reader.classList.contains("hide")||lastCh===null)return;
   clearTimeout(scrollTimer);
-  scrollTimer=setTimeout(()=>{ scrollPos[lastCh]=window.scrollY; LS.set("scroll",scrollPos); },300);
+  scrollTimer=setTimeout(()=>{ scrollPos[lastCh]=window.scrollY; saveScroll(); },300);
 },{passive:true});
 
-$("#backBtn").onclick=()=>{ location.hash=""; };
+/* back button: reader -> book home; book home -> shelf; shelf -> (hidden) */
+$("#backBtn").onclick=()=>{
+  const mCh = location.hash.match(/^#\/book\/([\w-]+)\/ch\/(\d+)$/);
+  if(mCh){ location.hash = `#/book/${mCh[1]}`; }
+  else { location.hash = ""; }
+};
 
 /* ------------ settings ------------ */
 $("#settingsBtn").onclick=()=>{ syncSheet(); $("#sheet").classList.remove("hide"); };
@@ -302,18 +396,43 @@ function applyTheme(t){
 function syncSheet(){
   document.querySelectorAll("#fontSeg button").forEach(b=>b.classList.toggle("on",+b.dataset.f===fontScale));
   document.querySelectorAll("#themeSeg button").forEach(b=>b.classList.toggle("on",b.dataset.t===theme));
-  $("#histBox").innerHTML = history_.length
-    ? "పూర్తయిన పారాయణలు · Completed: "+history_.map(d=>`<b>${d}</b>`).join(", ")
-    : "ఇంకా పారాయణ పూర్తికాలేదు · No completed saptaha yet.";
+
+  /* Parayana reset only makes sense inside a book with a day-split (Satcharitra-style) */
+  const inBook = currentBookId && currentBookCfg && currentBookCfg.daySplit;
+  $("#parayanaHdr").classList.toggle("hide", !inBook);
+  $("#resetBtn").classList.toggle("hide", !inBook);
+  $("#histBox").innerHTML = inBook
+    ? (history_.length
+        ? "పూర్తయిన పారాయణలు · Completed: "+history_.map(d=>`<b>${d}</b>`).join(", ")
+        : "ఇంకా పారాయణ పూర్తికాలేదు · No completed saptaha yet.")
+    : "";
 }
 $("#resetBtn").onclick=()=>{
   const done=Object.keys(read).length;
   if(!confirm("కొత్త సప్తాహం ప్రారంభించాలా? ప్రస్తుత పురోగతి రీసెట్ అవుతుంది.\nStart a new saptaha? Current progress will reset."))return;
-  if(done>=chapters.length-1){ history_.push(new Date().toISOString().slice(0,10)); LS.set("history",history_); }
-  read={}; LS.set("read",read);
-  scrollPos={}; LS.set("scroll",scrollPos);
-  lastCh=null; LS.set("lastCh",null);
+  if(done>=chapters.length-1){ history_.push(new Date().toISOString().slice(0,10)); saveHistory(); }
+  read={}; saveRead();
+  scrollPos={}; saveScroll();
+  lastCh=null; saveLastCh();
   $("#sheet").classList.add("hide"); showHome();
+};
+
+/* Force refresh: clears SW + caches and hard-reloads. Replaces the old
+   manual "bump VERSION in sw.js every deploy" approach — this button
+   is the recovery tool for stale installs (e.g. on someone else's phone). */
+$("#refreshBtn").onclick=async ()=>{
+  if(!confirm("యాప్‌ను తాజాగా రిఫ్రెష్ చేయాలా? మళ్ళీ లోడ్ అవుతుంది.\nForce refresh the app to fetch the latest content?"))return;
+  try{
+    if("serviceWorker" in navigator){
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for(const r of regs) await r.unregister();
+    }
+    if("caches" in window){
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k=>caches.delete(k)));
+    }
+  }catch(e){}
+  location.reload();
 };
 
 /* ------------ utils / sw ------------ */

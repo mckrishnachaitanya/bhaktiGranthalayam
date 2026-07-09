@@ -1,5 +1,5 @@
-const VERSION = "ssc-v3";
-const ASSETS = ["./", "index.html", "chapters.json", "manifest.json", "icon-192.png", "icon-512.png"];
+const VERSION = "ssc-v5";
+const ASSETS = ["./", "index.html", "books.json", "chapters.json", "manifest.json", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -14,6 +14,8 @@ self.addEventListener("activate", e => {
 });
 
 // Cache-first for same-origin; network-first fallback for fonts etc.
+// Any new same-origin file (e.g. a new book's chapters file) gets cached
+// automatically the first time it's fetched, even if not listed in ASSETS.
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
   if (url.origin === location.origin) {
