@@ -5,7 +5,36 @@
     "subtitle": "Sri Sai Satcharitra",
     "type": "narrative",
     "chaptersFile": "chapters.json",
-    "daySplit": [ [1,7], [8,15], [16,22], [23,30], [31,37], [38,44], [45,51] ]
+    "daySplit": [
+      [
+        1,
+        7
+      ],
+      [
+        8,
+        15
+      ],
+      [
+        16,
+        22
+      ],
+      [
+        23,
+        30
+      ],
+      [
+        31,
+        37
+      ],
+      [
+        38,
+        44
+      ],
+      [
+        45,
+        51
+      ]
+    ]
   },
   {
     "id": "vinayaka_vratham",
@@ -20,5 +49,12 @@
     "subtitle": "Nagula Chavithi Nomu",
     "type": "narrative",
     "chaptersFile": "nagula_chavithi.json"
+  },
+  {
+    "id": "khadgamala",
+    "title": "శ్రీ దేవీ ఖడ్గమాలా స్తోత్రం",
+    "subtitle": "Sri Devi Khadgamala Stotram",
+    "type": "collection",
+    "chaptersFile": "khadgamala.json"
   }
 ]

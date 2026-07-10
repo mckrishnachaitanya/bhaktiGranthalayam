@@ -1,5 +1,5 @@
-const VERSION = "ssc-v6";
-const ASSETS = ["./", "index.html", "books.json", "chapters.json", "manifest.json", "icon-192.png", "icon-512.png"];
+const VERSION = "ssc-v7";
+const ASSETS = ["./", "index.html", "books.json", "chapters.json", "khadgamala.json", "manifest.json", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
