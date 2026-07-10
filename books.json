@@ -6,5 +6,12 @@
     "type": "narrative",
     "chaptersFile": "chapters.json",
     "daySplit": [ [1,7], [8,15], [16,22], [23,30], [31,37], [38,44], [45,51] ]
+  },
+  {
+    "id": "vinayaka_vratham",
+    "title": "వినాయక చవితి వ్రత మహాత్మ్యం",
+    "subtitle": "Vinayaka Chavithi Vratha Mahathyam",
+    "type": "narrative",
+    "chaptersFile": "vinayaka_vratham.json"
   }
 ]
