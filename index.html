@@ -112,6 +112,16 @@ main{padding:16px 16px calc(env(safe-area-inset-bottom) + 24px);max-width:640px;
 .danger{color:var(--kumkuma);font-size:.85rem;padding:12px 0 0;text-align:center;width:100%}
 .hist{font-size:.8rem;color:var(--ink-soft);margin-top:6px;line-height:1.7}
 
+/* ---------- share ---------- */
+.bookcard{cursor:pointer}
+.bookcard .shareIcon{flex-shrink:0;font-size:1.05rem;padding:8px;border-radius:8px;color:var(--ink-soft)}
+.bookcard .shareIcon:active{background:var(--paper)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
+  background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:20px;
+  font-size:.85rem;z-index:30;opacity:0;transition:opacity .25s;pointer-events:none;
+  max-width:80vw;text-align:center}
+.toast.show{opacity:1}
+
 /* reduced motion */
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
@@ -124,12 +134,14 @@ main{padding:16px 16px calc(env(safe-area-inset-bottom) + 24px);max-width:640px;
     <h1 id="barTitle">భక్తి గ్రంథాలయం</h1>
     <div class="sub" id="barSub">Bhakti Granthalayam</div>
   </div>
+  <button class="iconbtn hide" id="shareBtn" aria-label="Share">⤴</button>
   <button class="iconbtn" id="settingsBtn" aria-label="Settings">Aa</button>
 </header>
 
 <main id="shelf"></main>
 <main id="home" class="hide"></main>
 <main id="reader" class="hide"></main>
+<div id="toast" class="toast"></div>
 
 <div id="sheet" class="hide">
   <div class="panel">
@@ -170,6 +182,7 @@ let read      = {};
 let lastCh    = null;
 let scrollPos = {};
 let history_  = [];
+let currentChIndex = null;  // index of chapter currently open in reader (any book type)
 
 /* display prefs are app-wide, not per-book */
 let fontScale = LS.get("font", 1.05);
@@ -275,6 +288,7 @@ function route(){
 function showShelf(){
   home.classList.add("hide"); reader.classList.add("hide"); shelf.classList.remove("hide");
   $("#backBtn").classList.add("hide");
+  $("#shareBtn").classList.add("hide");
   $("#barTitle").textContent="భక్తి గ్రంథాలయం";
   $("#barSub").textContent="Bhakti Granthalayam";
   document.title="భక్తి గ్రంథాలయం";
@@ -283,14 +297,15 @@ function showShelf(){
   h += booksConfig.map(b=>{
     const isCollection = b.type === "collection";
     const done = isCollection ? 0 : Object.keys(LS.get(`read_${b.id}`, {})).length;
-    return `<button class="bookcard" onclick="location.hash='#/book/${b.id}'">
+    return `<div class="bookcard" onclick="location.hash='#/book/${b.id}'">
       <span class="glyph">${isCollection ? "🪔" : "📖"}</span>
       <span class="info">
         <span class="ttl">${esc(b.title)}</span>
         <span class="sub2">${esc(b.subtitle||"")}</span>
         ${done ? `<span class="prog">${done} చదివారు · read</span>` : ""}
       </span>
-    </button>`;
+      <button class="shareIcon" aria-label="Share book" onclick="event.stopPropagation();shareBook('${b.id}')">⤴</button>
+    </div>`;
   }).join("");
   h += `</div>`;
   shelf.innerHTML = h;
@@ -303,6 +318,10 @@ function showHome(){
   $("#barTitle").textContent = currentBookCfg ? currentBookCfg.title : "";
   $("#barSub").textContent = currentBookCfg ? (currentBookCfg.subtitle||"") : "";
   document.title = currentBookCfg ? currentBookCfg.title : "భక్తి గ్రంథాలయం";
+
+  const shareBtn = $("#shareBtn");
+  shareBtn.classList.remove("hide");
+  shareBtn.onclick = ()=>shareBook(currentBookId);
 
   if(currentBookCfg && currentBookCfg.type === "collection"){
     showCollectionHome();
@@ -369,6 +388,10 @@ function shortTitle(i){
 function showReader(i){
   shelf.classList.add("hide"); home.classList.add("hide"); reader.classList.remove("hide");
   $("#backBtn").classList.remove("hide");
+  currentChIndex = i;
+  const shareBtn = $("#shareBtn");
+  shareBtn.classList.remove("hide");
+  shareBtn.onclick = shareChapter;
   const c=chapters[i];
   $("#barTitle").textContent=shortTitle(i);
   $("#barSub").textContent=`Chapter ${i} of ${chapters.length-1}`;
@@ -384,6 +407,7 @@ function showReader(i){
   if(isCollection){
     /* Standalone item: no progress tracking, no sequence — just back to the list. */
     h+=`<div class="endactions"><div class="navrow">
+      <button class="btn" onclick="shareChapter()">↗ పంచుకోండి · Share</button>
       <button class="btn" onclick="location.hash='#/book/${currentBookId}'">జాబితా · List</button>
     </div></div>`;
     reader.innerHTML=h;
@@ -398,7 +422,9 @@ function showReader(i){
       ${i>0?`<button class="btn" onclick="location.hash='#/book/${currentBookId}/ch/${i-1}'">‹ మునుపటి</button>`:""}
       <button class="btn" onclick="location.hash='#/book/${currentBookId}'">జాబితా · List</button>
       ${i<chapters.length-1?`<button class="btn" onclick="location.hash='#/book/${currentBookId}/ch/${i+1}'">తరువాత ›</button>`:""}
-    </div></div>`;
+    </div>
+    <button class="btn" onclick="shareChapter()">↗ ఈ అధ్యాయాన్ని పంచుకోండి · Share this chapter</button>
+  </div>`;
   reader.innerHTML=h;
   $("#doneBtn").onclick=()=>{ read[i]=true; saveRead(); location.hash=`#/book/${currentBookId}`; };
 
@@ -478,6 +504,45 @@ $("#refreshBtn").onclick=async ()=>{
   }catch(e){}
   location.reload();
 };
+
+/* ------------ sharing ------------ */
+let toastTimer=null;
+function toast(msg){
+  const t=$("#toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("show"),2400);
+}
+function shareLink(hash){
+  return location.origin + location.pathname + hash;
+}
+async function doShare(title, text, url){
+  if(navigator.share){
+    try{ await navigator.share({title, text, url}); return; }
+    catch(e){ if(e && e.name==="AbortError") return; /* user cancelled the sheet, do nothing */ }
+  }
+  const full = `${text}\n${url}`;
+  try{
+    await navigator.clipboard.writeText(full);
+    toast("లింక్ కాపీ చేయబడింది · Copied — paste it in WhatsApp");
+  }catch(e){
+    prompt("కాపీ చేసి పంపండి · Copy this and send:", full);
+  }
+}
+function shareBook(id){
+  const b = booksConfig.find(x=>x.id===id);
+  if(!b) return;
+  const url = shareLink(`#/book/${id}`);
+  const text = b.subtitle ? `${b.title} · ${b.subtitle}` : b.title;
+  doShare(b.title, text, url);
+}
+function shareChapter(){
+  if(!currentBookId || currentChIndex===null || !chapters[currentChIndex]) return;
+  const c = chapters[currentChIndex];
+  const url = shareLink(`#/book/${currentBookId}/ch/${currentChIndex}`);
+  let preview = (c.body||[]).slice(0,2).join(" ").trim();
+  if(preview.length>140) preview = preview.slice(0,138)+"…";
+  const text = preview ? `${c.title} — ${preview}` : c.title;
+  doShare(c.title, text, url);
+}
 
 /* ------------ utils / sw ------------ */
 function esc(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
