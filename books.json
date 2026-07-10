@@ -13,5 +13,12 @@
     "subtitle": "Vinayaka Chavithi Vratha Mahathyam",
     "type": "narrative",
     "chaptersFile": "vinayaka_vratham.json"
+  },
+  {
+    "id": "nagula_chavithi",
+    "title": "నాగుల చవితి నోము",
+    "subtitle": "Nagula Chavithi Nomu",
+    "type": "narrative",
+    "chaptersFile": "nagula_chavithi.json"
   }
 ]
