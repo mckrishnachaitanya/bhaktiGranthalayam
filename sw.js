@@ -1,4 +1,4 @@
-const VERSION = "ssc-v7";
+const VERSION = "ssc-v8";
 const ASSETS = ["./", "index.html", "books.json", "chapters.json", "khadgamala.json", "manifest.json", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {

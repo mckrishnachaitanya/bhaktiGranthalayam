@@ -212,9 +212,25 @@ function prepChapters(raw){
   return raw.map(c=>{
     const paras = c.paragraphs || [];
     const hasBanner = paras[0] && paras[0].trim()===BANNER;
-    const titleIdx = hasBanner ? 1 : 0;
-    const title = (paras[titleIdx] || c.title || "").trim();
-    const body = paras.slice(titleIdx+1);
+    const explicitTitle = (c.title||"").trim();
+    let title, body;
+    if (hasBanner){
+      /* Satcharitra-style: banner repeated as paras[0], real heading is paras[1]. */
+      title = (paras[1] || explicitTitle || "").trim();
+      body = paras.slice(2);
+    } else if (explicitTitle && paras[0] && paras[0].trim() === explicitTitle){
+      /* Older convention: the title is duplicated as the first paragraph — drop the dup. */
+      title = explicitTitle;
+      body = paras.slice(1);
+    } else if (explicitTitle){
+      /* A real, distinct title was supplied in the JSON — trust it, keep all paragraphs as body. */
+      title = explicitTitle;
+      body = paras;
+    } else {
+      /* No title anywhere — fall back to using the first paragraph as a label. */
+      title = (paras[0] || "").trim();
+      body = paras.slice(1);
+    }
     const nums = (c.link_text||"").match(/\d+/g);
     const isChapter = /^Chapters?\b/i.test(c.link_text||"") && nums;
     return {
